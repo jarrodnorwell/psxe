@@ -7,17 +7,17 @@
 #include "frontend/screen.h"
 #include "frontend/config.h"
 
-void audio_update(void *ud, uint8_t *buf, int size)
+void audio_callback(void *userdata, SDL_AudioStream *stream, int additional_amount, int total_amount)
 {
-    psx_cdrom_t *cdrom = ((psx_t *)ud)->cdrom;
-    psx_spu_t *spu = ((psx_t *)ud)->spu;
+    psx_cdrom_t *cdrom = ((psx_t *)userdata)->cdrom;
+    psx_spu_t *spu = ((psx_t *)userdata)->spu;
 
-    memset(buf, 0, size);
+    uint8_t *buf = (uint8_t *)malloc(additional_amount);
 
-    psx_cdrom_get_audio_samples(cdrom, buf, size);
+    psx_cdrom_get_audio_samples(cdrom, buf, additional_amount);
     psx_spu_update_cdda_buffer(spu, cdrom->cdda_buf);
 
-    for (int i = 0; i < (size >> 2); i++)
+    for (int i = 0; i < (additional_amount >> 2); i++)
     {
         uint32_t sample = psx_spu_get_sample(spu);
 
@@ -27,6 +27,9 @@ void audio_update(void *ud, uint8_t *buf, int size)
         *(int16_t *)(&buf[(i << 2) + 0]) += left;
         *(int16_t *)(&buf[(i << 2) + 2]) += right;
     }
+
+    SDL_PutAudioStreamData(stream, buf, additional_amount);
+    free(buf);
 }
 
 int main(int argc, char *argv[])
@@ -58,22 +61,24 @@ int main(int argc, char *argv[])
     psxe_screen_set_scale(screen, cfg->scale);
     psxe_screen_reload(screen);
 
+    SDL_SetHint(SDL_HINT_AUDIO_DRIVER, "directsound");
     SDL_Init(SDL_INIT_AUDIO);
 
-    // SDL_AudioDeviceID dev;
-    // SDL_AudioSpec obtained, desired;
+    // open audio device
+    SDL_AudioSpec spec;
+    SDL_zero(spec);
+    spec.channels = 2;
+    spec.format = SDL_AUDIO_S16;
+    spec.freq = 44100;
 
-    // desired.freq = 44100;
-    // desired.format = SDL_AUDIO_S16;
-    // desired.channels = 2;
-    // desired.samples = CD_SECTOR_SIZE >> 2;
-    // desired.callback = &audio_update;
-    // desired.userdata = psx;
+    SDL_AudioDeviceID deviceID;
+    deviceID = SDL_OpenAudioDevice(SDL_AUDIO_DEVICE_DEFAULT_PLAYBACK, &spec);
 
-    // dev = SDL_OpenAudioDevice(&desired, &obtained);
+    SDL_AudioStream *stream;
+    stream = SDL_OpenAudioDeviceStream(deviceID, &spec, &audio_callback, psx);
 
-    // if (dev)
-    //     SDL_PauseAudioDevice(dev, 0);
+    if (stream)
+        SDL_ResumeAudioStreamDevice(stream);
 
     psx_gpu_t *gpu = psx_get_gpu(psx);
     psx_gpu_set_event_callback(gpu, GPU_EVENT_DMODE, psxe_gpu_dmode_event_cb);
@@ -111,7 +116,8 @@ int main(int argc, char *argv[])
     while (psxe_screen_is_open(screen))
         psx_update(psx);
 
-    // SDL_PauseAudioDevice(dev, 1);
+    if (stream)
+        SDL_DestroyAudioStream(stream);
 
     psx_cpu_t *cpu = psx_get_cpu(psx);
 
