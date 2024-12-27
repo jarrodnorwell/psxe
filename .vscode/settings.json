@@ -40,6 +40,23 @@
         "sdl.h": "c",
         "sdl_main.h": "c",
         "toml.h": "c",
-        "string.h": "c"
+        "string.h": "c",
+        "algorithm": "c",
+        "chrono": "c",
+        "functional": "c",
+        "optional": "c",
+        "system_error": "c",
+        "type_traits": "c",
+        "xtr1common": "c",
+        "xutility": "c",
+        "array": "c",
+        "format": "c",
+        "initializer_list": "c",
+        "list": "c",
+        "utility": "c",
+        "vector": "c",
+        "xhash": "c",
+        "xstring": "c",
+        "xtree": "c"
     }
 }
