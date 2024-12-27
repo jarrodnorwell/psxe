@@ -204,6 +204,8 @@ void psxe_screen_reload(psxe_screen_t *screen)
         SDL_SetRenderScale(screen->renderer, width_scale, height_scale);
     }
 
+    SDL_SetRenderVSync(screen->renderer, true);
+
     screen->open = 1;
 }
 

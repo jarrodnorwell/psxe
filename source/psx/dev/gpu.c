@@ -56,6 +56,18 @@ int max3(int a, int b, int c)
     return (m > c) ? m : c;
 }
 
+uint32_t get_bit(uint32_t value, uint8_t bit)
+{
+    uint32_t mask = 1 << bit;
+    return (value & mask) & bit;
+}
+
+uint32_t get_bits(uint32_t value, uint8_t start, uint8_t count)
+{
+    uint32_t mask = (1U << count) - 1;
+    return (value >> start) & mask;
+}
+
 psx_gpu_t *psx_gpu_create(void)
 {
     return (psx_gpu_t *)malloc(sizeof(psx_gpu_t));
@@ -74,7 +86,8 @@ void psx_gpu_init(psx_gpu_t *gpu, psx_ic_t *ic)
     memset(gpu->empty, 0, PSX_GPU_VRAM_SIZE);
 
     gpu->state = GPU_STATE_RECV_CMD;
-    gpu->gpustat |= 0x800000;
+
+    gpu->gpustat = 0x14802000;
 
     // Default window size, this is not normally needed
     gpu->display_mode = 1;
@@ -148,7 +161,53 @@ uint32_t psx_gpu_read32(psx_gpu_t *gpu, uint32_t offset)
     }
     break;
     case 0x04:
-        return gpu->gpustat | 0x1c000000;
+    {
+        uint32_t value = 0;
+
+        value |= gpu->texp_x << 0;
+        value |= gpu->texp_y << 4;
+        value |= gpu->sem_transp << 5;
+        value |= gpu->texp_d << 7;
+        value |= gpu->dither << 9;
+        value |= gpu->draw_to_disp << 10;
+        value |= gpu->set_mask << 11;
+        value |= gpu->check_mask << 12;
+        value |= gpu->interlace_field << 13;
+        value |= gpu->reverse_flag << 14;
+        value |= gpu->texture_disable << 15;
+        value |= gpu->hres2 << 16;
+        value |= gpu->hres1 << 17;
+        value |= gpu->vres << 19;
+        value |= gpu->vmode << 20;
+        value |= gpu->disp_area_color_depth << 21;
+        value |= gpu->vertical_interlace << 22;
+        value |= gpu->disp_enable << 23;
+        value |= gpu->interrupt_request << 24;
+
+        value |= 1 << 26;
+        value |= 1 << 27;
+        value |= 1 << 28;
+
+        uint32_t req = 0;
+        switch (gpu->dma_dir)
+        {
+        case 0:
+            req = 0;
+            break;
+        case 1:
+        case 2:
+        case 3:
+            req = 1;
+            break;
+        }
+
+        value |= req << 25;
+
+        value |= gpu->dma_dir << 29;
+        value |= gpu->even_odd_lines << 31;
+
+        return value;
+    }
     }
 
     log_warn("Unhandled 32-bit GPU read at offset %08x", offset);
@@ -291,7 +350,7 @@ void gpu_render_triangle(psx_gpu_t *gpu, vertex_t v0, vertex_t v1, vertex_t v2, 
     }
     else
     {
-        transp_mode = (gpu->gpustat >> 5) & 3;
+        transp_mode = get_bits(gpu->gpustat, 6, 2);
     }
 
     a = v0;
@@ -543,7 +602,7 @@ void gpu_render_rect(psx_gpu_t *gpu, rect_data_t data)
 
     int textured = (data.attrib & RA_TEXTURED) != 0;
     int transp = (data.attrib & RA_TRANSP) != 0;
-    int transp_mode = (gpu->gpustat >> 5) & 3;
+    int transp_mode = get_bits(gpu->gpustat, 6, 2);
 
     int clutx = (data.clut & 0x3f) << 4;
     int cluty = (data.clut >> 6) & 0x1ff;
@@ -2170,11 +2229,20 @@ void psx_gpu_update_cmd(psx_gpu_t *gpu)
         break;
     case 0xe1:
     {
-        gpu->gpustat &= 0xfffff800;
-        gpu->gpustat |= gpu->buf[0] & 0x7ff;
-        gpu->texp_x = (gpu->gpustat & 0xf) << 6;
+        uint32_t value = gpu->buf[0];
+        // gpu->texp_x = get_bits(value, 0, 4);
+        // gpu->texp_y = get_bit(gpu->buf[0], 4);
+        gpu->sem_transp = get_bits(value, 5, 2);
+        // gpu->texp_d = get_bits(value, 7, 2);
+        gpu->dither = get_bit(gpu->buf[0], 9);
+        gpu->draw_to_disp = get_bit(gpu->buf[0], 10);
+        gpu->texture_disable = get_bit(gpu->buf[0], 11);
+
+        gpu->gpustat &= 0xFFFFF800;
+        gpu->gpustat |= gpu->buf[0] & 0x7FF;
+        gpu->texp_x = (gpu->gpustat & 0xF) << 6;
         gpu->texp_y = (gpu->gpustat & 0x10) << 4;
-        gpu->texp_d = (gpu->gpustat >> 7) & 0x3;
+        gpu->texp_d = (gpu->gpustat >> 7) & 3;
     }
     break;
     case 0xe2:
@@ -2206,6 +2274,8 @@ void psx_gpu_update_cmd(psx_gpu_t *gpu)
     case 0xe6:
     {
         /* To-do: Implement mask bit thing */
+        gpu->set_mask = get_bit(gpu->buf[0], 0);
+        gpu->check_mask = get_bit(gpu->buf[0], 1);
     }
     break;
     default:
@@ -2267,11 +2337,18 @@ void psx_gpu_write32(psx_gpu_t *gpu, uint32_t offset, uint32_t value)
 
         switch (cmd)
         {
+        case 0x00:
+        {
+            gpu->gpustat = 0x14802000;
+        }
+        break;
         // Display enable
         case 0x03:
         {
-            gpu->gpustat &= ~0x00800000;
-            gpu->gpustat |= (value << 23) & 0x00800000;
+            gpu->disp_enable = get_bit(gpu->buf[0], 0);
+
+            gpu->gpustat &= ~0x800000;
+            gpu->gpustat |= (value << 23) & 0x800000;
         }
         break;
         case 0x04:
@@ -2297,6 +2374,14 @@ void psx_gpu_write32(psx_gpu_t *gpu, uint32_t offset, uint32_t value)
         }
         break;
         case 0x08:
+            gpu->hres1 = get_bits(value, 0, 2);
+            gpu->vres = get_bit(value, 2);
+            gpu->vmode = get_bit(value, 3);
+            gpu->disp_area_color_depth = get_bit(value, 4);
+            gpu->vertical_interlace = get_bit(value, 5);
+            gpu->hres2 = get_bit(value, 6);
+            gpu->reverse_flag = get_bit(value, 7);
+
             gpu->display_mode = value & 0xffffff;
 
             if (gpu->event_cb_table[GPU_EVENT_DMODE])
