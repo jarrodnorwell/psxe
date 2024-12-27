@@ -22,7 +22,7 @@ cmake --build . --config Release
 - [x] GTE
 - [x] TMR
 - [x] CDR
-- [] MCD
+- [ ] MCD
 
 ## Screenshots
 <img src="assets/atlantis.png" width="33.333333%" />
