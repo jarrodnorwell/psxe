@@ -2229,20 +2229,17 @@ void psx_gpu_update_cmd(psx_gpu_t *gpu)
         break;
     case 0xe1:
     {
+        gpu->gpustat &= 0xFFFFF800;
+        gpu->gpustat |= gpu->buf[0] & 0x7FF;
+
         uint32_t value = gpu->buf[0];
-        // gpu->texp_x = get_bits(value, 0, 4);
-        // gpu->texp_y = get_bit(gpu->buf[0], 4);
+        gpu->texp_x = (gpu->gpustat & 0xF) << 6;
+        gpu->texp_y = (gpu->gpustat & 0x10) << 4;
         gpu->sem_transp = get_bits(value, 5, 2);
-        // gpu->texp_d = get_bits(value, 7, 2);
+        gpu->texp_d = (gpu->gpustat >> 7) & 3;
         gpu->dither = get_bit(gpu->buf[0], 9);
         gpu->draw_to_disp = get_bit(gpu->buf[0], 10);
         gpu->texture_disable = get_bit(gpu->buf[0], 11);
-
-        gpu->gpustat &= 0xFFFFF800;
-        gpu->gpustat |= gpu->buf[0] & 0x7FF;
-        gpu->texp_x = (gpu->gpustat & 0xF) << 6;
-        gpu->texp_y = (gpu->gpustat & 0x10) << 4;
-        gpu->texp_d = (gpu->gpustat >> 7) & 3;
     }
     break;
     case 0xe2:
