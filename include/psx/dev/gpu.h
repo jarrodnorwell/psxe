@@ -134,7 +134,17 @@ struct psx_gpu_t
 
     uint32_t display_mode;
     uint32_t gpuread;
-    uint32_t gpustat;
+    uint32_t gpustat; // TODO: remove this for a union-struct
+
+    uint32_t interlace_field, reverse_flag,
+        texture_disable, hres2, hres1,
+        vres, vmode, disp_area_color_depth, vertical_interlace,
+        disp_enable, interrupt_request,
+        dma_data_request, ready_1, ready_2, ready_3, dma_dir, even_odd_lines;
+    uint32_t draw_to_disp;
+    uint32_t dither;
+    uint32_t sem_transp;
+    uint32_t set_mask, check_mask;
 
     // Drawing area
     uint32_t draw_x1, draw_y1;

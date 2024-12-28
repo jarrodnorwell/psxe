@@ -105,6 +105,7 @@ int main(int argc, char *argv[])
 
     if (cfg->exe)
     {
+        SDL_PauseAudioStreamDevice(stream); // fixes high pitch noise
         while (psx->cpu->pc != 0x80030000)
             psx_update(psx);
 
